@@ -1,5 +1,6 @@
 const express = require('express');
 const passport = require('passport');
+const Post = require('../../models/Post');
 const Profile = require('../../models/Profile');
 const User = require('../../models/User');
 const validateProfileInput = require('../../validation/profile');
@@ -187,17 +188,29 @@ router.post(
 );
 
 // @route   DELETE api/profile
-// @desc    Delete user and profile
+// @desc    Delete user, profile and posts
 // @access  Private
 router.delete(
     '/',
     passport.authenticate('jwt', { session: false }),
     (req, res) => {
-        Profile.findOneAndRemove({ user: req.user.id }).then(() => {
-            User.findOneAndRemove({ _id: req.user.id }).then(() => {
-                res.json({ success: true });
+        Post.updateMany(
+            { user: { $ne: req.user.id } }, // filter out user's posts
+            {
+                $pull: {
+                    likes: { user: req.user.id }, // remove likes made by user on other posts
+                    comments: { user: req.user.id } // remove comments made by user on other posts
+                }
+            }
+        )
+            .deleteMany({ user: req.user.id }) // delete all of user's posts
+            .then(() => {
+                Profile.findOneAndRemove({ user: req.user.id }).then(() => {
+                    User.findOneAndRemove({ _id: req.user.id }).then(() => {
+                        res.json({ success: true });
+                    });
+                });
             });
-        });
     }
 );
 
